@@ -1,0 +1,148 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Anket</title>
+  <script src="https://challenges.cloudflare.com/turnstile/v0/api.js" async defer></script>
+  <style>
+    * { box-sizing: border-box; }
+    body {
+      font-family: system-ui, sans-serif;
+      display: flex; justify-content: center; align-items: center;
+      min-height: 100vh; margin: 0; background: #f5f5f5;
+    }
+    .kart {
+      background: white; padding: 2rem; border-radius: 12px;
+      box-shadow: 0 2px 16px rgba(0,0,0,0.1); width: 100%; max-width: 480px;
+    }
+    h1 { margin-top: 0; font-size: 1.4rem; text-align: center; }
+    .secenekler {
+      display: flex; gap: 1rem; margin: 1.5rem 0; justify-content: center;
+    }
+    .aday-kart {
+      flex: 1; border: 3px solid #e0e0e0; border-radius: 12px;
+      padding: 1rem; cursor: pointer; transition: border-color 0.2s, box-shadow 0.2s;
+      text-align: center; user-select: none;
+    }
+    .aday-kart:hover { border-color: #6366f1; }
+    .aday-kart.secili {
+      border-color: #6366f1;
+      box-shadow: 0 0 0 3px rgba(99,102,241,0.2);
+    }
+    .aday-kart img {
+      width: 100%; aspect-ratio: 1/1; object-fit: cover;
+      border-radius: 8px; margin-bottom: 0.75rem;
+      background: #e0e0e0;
+    }
+    .aday-kart .ad {
+      font-weight: 600; font-size: 1rem; color: #1f2937;
+    }
+    .aday-kart input[type="radio"] { display: none; }
+    button {
+      width: 100%; padding: 0.85rem; background: #6366f1; color: white;
+      border: none; border-radius: 8px; font-size: 1rem; cursor: pointer;
+      margin-top: 1rem;
+    }
+    button:disabled { background: #a5a6f6; cursor: not-allowed; }
+    #mesaj { margin-top: 1rem; padding: 0.75rem; border-radius: 8px; display: none; text-align: center; }
+    .basari { background: #d1fae5; color: #065f46; }
+    .hata    { background: #fee2e2; color: #991b1b; }
+    .turnstile-wrap { display: flex; justify-content: center; margin-top: 1rem; }
+  </style>
+</head>
+<body>
+<div class="kart">
+  <h1>🗳️ Kimi Destekliyorsunuz?</h1>
+  <form id="anketForm">
+    <div class="secenekler">
+
+      <label class="aday-kart" id="kart-eray">
+        <input type="radio" name="secim" value="Eray" required>
+        <img src="eray.jpg" alt="Eray" onerror="this.style.background='#c7d2fe';this.alt='Eray'">
+        <div class="ad">Eray</div>
+      </label>
+
+      <label class="aday-kart" id="kart-hobbit">
+        <input type="radio" name="secim" value="Hobbit Emo'nun Tarafı">
+        <img src="hobbit.jpg" alt="Hobbit Emo" onerror="this.style.background='#fde68a';this.alt='Hobbit Emo'">
+        <div class="ad">Hobbit Emo'nun Tarafı</div>
+      </label>
+
+    </div>
+
+    <div class="turnstile-wrap">
+      <div class="cf-turnstile"
+           data-sitekey="0x4AAAAAADWq0TnrAkgIpWxf"
+           data-theme="light">
+      </div>
+    </div>
+
+    <button type="submit" id="gonderBtn">Oy Ver</button>
+  </form>
+  <div id="mesaj"></div>
+</div>
+
+<script>
+  document.querySelectorAll('input[name="secim"]').forEach(radio => {
+    radio.addEventListener('change', () => {
+      document.querySelectorAll('.aday-kart').forEach(k => k.classList.remove('secili'));
+      radio.closest('.aday-kart').classList.add('secili');
+    });
+  });
+
+  document.getElementById('anketForm').addEventListener('submit', async (e) => {
+    e.preventDefault();
+    const btn = document.getElementById('gonderBtn');
+    const mesaj = document.getElementById('mesaj');
+    btn.disabled = true;
+    btn.textContent = 'Gönderiliyor...';
+    mesaj.style.display = 'none';
+
+    const secim = document.querySelector('input[name="secim"]:checked')?.value;
+    const token = document.querySelector('[name="cf-turnstile-response"]')?.value;
+
+    if (!token) {
+      mesaj.className = 'hata'; mesaj.textContent = 'Lütfen robot doğrulamasını tamamlayın.';
+      mesaj.style.display = 'block'; btn.disabled = false; btn.textContent = 'Oy Ver';
+      return;
+    }
+
+    try {
+      const res = await fetch('/api/oy-ver', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ secim, turnstileToken: token })
+      });
+      const veri = await res.json();
+
+      if (res.ok) {
+        // Kullanıcı başarılı oy verince formu gizle
+        document.getElementById('anketForm').style.display = 'none';
+        
+        // Gelen verilerden toplamı ve yüzdeleri hesapla
+        const toplam = (veri.sonuclar?.eray || 0) + (veri.sonuclar?.hobbit || 0);
+        const erayYuzde = toplam > 0 ? Math.round((veri.sonuclar.eray / toplam) * 100) : 0;
+        const hobbitYuzde = toplam > 0 ? Math.round((veri.sonuclar.hobbit / toplam) * 100) : 0;
+
+        mesaj.className = 'basari';
+        mesaj.innerHTML = `
+          <h3 style="margin-top: 0; font-size: 1.2rem;">🗳️ Güncel Sonuçlar</h3>
+          <p style="margin: 5px 0 15px 0; font-size: 0.9rem; color: #047857;">Toplam Kullanılan Oy: <strong>${toplam}</strong></p>
+          
+          <div style="margin-bottom: 15px; text-align: left;">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.95rem;">
+              <span>Eray</span>
+              <span>%${erayYuzde} (${veri.sonuclar.eray} Oy)</span>
+            </div>
+            <div style="background: #e0e0e0; border-radius: 6px; height: 16px; width: 100%; margin-top: 5px; overflow: hidden;">
+              <div style="background: #6366f1; width: ${erayYuzde}%; height: 100%; border-radius: 6px; transition: width 0.5s;"></div>
+            </div>
+          </div>
+          
+          <div style="text-align: left;">
+            <div style="display: flex; justify-content: space-between; font-weight: 600; font-size: 0.95rem;">
+              <span>Hobbit Emo'nun Tarafı</span>
+              <span>%${hobbitYuzde} (${veri.sonuclar.hobbit} Oy)</span>
+            </div>
+            <div style="background: #e0e0e0; border-radius: 6px; height: 16px; width: 100%; margin-top:
